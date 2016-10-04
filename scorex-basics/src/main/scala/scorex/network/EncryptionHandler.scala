@@ -1,3 +1,4 @@
+
 package scorex.network
 
 import scorex.app.Application
@@ -6,7 +7,9 @@ import scorex.network.message.MessageSpec
 import scorex.utils.ScorexLogging
 import scorex.crypto.EllipticCurveImpl
 
-class EncryptionHandler(application: Application) extends ViewSynchronizer with ScorexLogging {
+trait EncryptionHandler extends ScorexLogging {
+
+  /*
   import EncryptionHandler._
   import application.encryptionMessagesSpecsRepo._
 
@@ -26,8 +29,5 @@ class EncryptionHandler(application: Application) extends ViewSynchronizer with 
       {
         log.debug(s"Starting encrypted communication with ${connectedPeer}")
       }
-  }
-}
-
-object EncryptionHandler {
+  }*/
 }

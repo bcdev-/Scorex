@@ -35,7 +35,7 @@ trait RunnableApplication extends Application with ScorexLogging {
   protected val additionalMessageSpecs: Seq[MessageSpec[_]]
 
   lazy override val basicMessagesSpecsRepo: BasicMessagesRepo = new BasicMessagesRepo()
-  lazy override val encryptionMessagesSpecsRepo: EncryptionMessagesRepo = new EncryptionMessagesRepo() // TODO: WYWAL
+  lazy override val encryptionMessagesSpecsRepo: EncryptionMessagesRepo = new EncryptionMessagesRepo()
 
   // wallet, needs strict evaluation
   override val wallet = {
@@ -64,8 +64,8 @@ trait RunnableApplication extends Application with ScorexLogging {
   lazy override val blockchainSynchronizer = actorSystem.actorOf(Props(classOf[BlockchainSynchronizer], this),
     "BlockchainSynchronizer")
   lazy override val coordinator = actorSystem.actorOf(Props(classOf[Coordinator], this), "Coordinator")
-  lazy override val encryptionHandler = actorSystem.actorOf(Props(classOf[EncryptionHandler], this),
-      "EncryptionHandler")
+//  lazy override val encryptionHandler = actorSystem.actorOf(Props(classOf[EncryptionHandler], this),
+//      "EncryptionHandler")
   private lazy val historyReplier = actorSystem.actorOf(Props(classOf[HistoryReplier], this), "HistoryReplier")
 
   def run() {
@@ -79,7 +79,7 @@ trait RunnableApplication extends Application with ScorexLogging {
     val combinedRoute = CompositeHttpService(actorSystem, apiTypes, apiRoutes, settings).compositeRoute
     Http().bindAndHandle(combinedRoute, settings.rpcAddress, settings.rpcPort)
 
-    Seq(scoreObserver, blockGenerator, blockchainSynchronizer, historyReplier, coordinator, encryptionHandler) foreach {
+    Seq(scoreObserver, blockGenerator, blockchainSynchronizer, historyReplier, coordinator/*, encryptionHandler*/) foreach {
       _ => // de-lazyning process :-)
     }
 

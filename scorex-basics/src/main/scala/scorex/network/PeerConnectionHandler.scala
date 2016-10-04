@@ -13,6 +13,7 @@ import scorex.network.message.MessageHandler.RawNetworkData
 import scorex.network.peer.PeerManager
 import scorex.network.peer.PeerManager.Handshaked
 import scorex.utils.ScorexLogging
+import scorex.network.message.MessageSpec
 
 import scala.annotation.tailrec
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -22,7 +23,7 @@ import scala.util.{Failure, Success}
 
 case class PeerConnectionHandler(application: RunnableApplication,
                                  connection: ActorRef,
-                                 remote: InetSocketAddress) extends Actor with ScorexLogging {
+                                 remote: InetSocketAddress) extends Actor with ScorexLogging with EncryptionHandler {
 
   import PeerConnectionHandler._
 
@@ -179,6 +180,37 @@ case class PeerConnectionHandler(application: RunnableApplication,
 
   private var chunksBuffer: ByteString = CompactByteString()
 
+  // TODO: CONSIDER MOVING TO IT'S OWN CLASS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+  
+  private def handleEncryptionPubKeyMessage(content: Any) = {
+    
+  }
+
+  private def handleStartEncryptionMessage() = {
+    
+  }
+  
+  private def handleOutOfBandMessages(spec: MessageSpec[_], msgBytes: Array[Byte]) = {
+    val repo = application.encryptionMessagesSpecsRepo
+
+    spec.deserializeData(msgBytes) match {
+      case Success(content) =>
+        spec.messageCode match {
+          case repo.EncryptionPubKey.messageCode =>
+            handleEncryptionPubKeyMessage(content)
+
+          case repo.StartEncryption.messageCode =>
+            handleStartEncryptionMessage()
+
+          case msgId =>
+            log.error(s"No handlers found for an out of bound message: $msgId, this should never happen!")
+        }
+      case Failure(e) =>
+        log.error("Failed to deserialize an out of bound message: " + e.getMessage)
+      //todo: disconnect
+    }
+  }
+  
   private def processReceivedData(data: ByteString) = {
     val (pkt, remainder) = getPacket(chunksBuffer ++ data)
     chunksBuffer = remainder
@@ -187,9 +219,14 @@ case class PeerConnectionHandler(application: RunnableApplication,
     pkt.find { packet =>
       application.messagesHandler.parseBytes(packet.toByteBuffer) match {
         case Success((spec, msgData)) =>
-          log.trace("Received message " + spec + " from " + remote)
-          // Encryption setup messages need to be handled ASAP, so we're skipping asynchronous execution for them
-          peerManager ! RawNetworkData(spec, msgData, remote)
+          // Encryption setup messages need to be handled immediately, so we're skipping asynchronous execution for them
+          if (spec.out_of_band == true) {
+            log.trace("Received an out of band message " + spec + " from " + remote)
+            handleOutOfBandMessages(spec)
+          } else {
+            log.trace("Received a message " + spec + " from " + remote)
+            peerManager ! RawNetworkData(spec, msgData, remote)
+          }
           false
 
         case Failure(e) =>

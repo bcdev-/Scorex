@@ -30,6 +30,8 @@ class EncryptionMessagesRepo()(implicit val transactionalModule: TransactionModu
     }
     
     override def serializeData(data: Unit): Array[Byte] = Array()
+    
+    override def out_of_band = true
   }
 
   object StartEncryption extends MessageSpec[Unit] {
@@ -41,6 +43,8 @@ class EncryptionMessagesRepo()(implicit val transactionalModule: TransactionModu
       Try(require(bytes.isEmpty, "Non-empty data for StartEncryption"))
     
     override def serializeData(data: Unit): Array[Byte] = Array()
+    
+    override def out_of_band = true
   }
 
   val specs = Seq(EncryptionPubKey, StartEncryption)
