@@ -2,7 +2,7 @@ package scorex.app
 
 import akka.actor.ActorRef
 import scorex.consensus.ConsensusModule
-import scorex.network.message.BasicMessagesRepo
+import scorex.network.message.{BasicMessagesRepo, EncryptionMessagesRepo}
 import scorex.settings.Settings
 import scorex.transaction.{BlockStorage, History, TransactionModule}
 import scorex.wallet.Wallet
@@ -21,6 +21,8 @@ trait Application {
   val appVersion: ApplicationVersion
 
   val basicMessagesSpecsRepo: BasicMessagesRepo
+
+  val encryptionMessagesSpecsRepo: EncryptionMessagesRepo
 
   val history: History
 

@@ -28,7 +28,7 @@ class BasicMessagesRepo()(implicit val transactionalModule: TransactionModule[_]
 
     override def serializeData(data: Unit): Array[Byte] = Array()
   }
-
+  
   object PeersSpec extends MessageSpec[Seq[InetSocketAddress]] {
     private val AddressLength = 4
     private val PortLength = 4

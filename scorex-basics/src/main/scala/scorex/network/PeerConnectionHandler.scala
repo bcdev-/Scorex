@@ -1,6 +1,7 @@
 package scorex.network
 
 import java.net.InetSocketAddress
+import java.nio.ByteOrder
 
 import akka.actor.{Actor, ActorRef, Terminated}
 import akka.io.Tcp
@@ -13,6 +14,7 @@ import scorex.network.peer.PeerManager
 import scorex.network.peer.PeerManager.Handshaked
 import scorex.utils.ScorexLogging
 
+import scala.annotation.tailrec
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.language.postfixOps
@@ -20,7 +22,7 @@ import scala.util.{Failure, Success}
 
 case class PeerConnectionHandler(application: RunnableApplication,
                                  connection: ActorRef,
-                                 remote: InetSocketAddress) extends Actor with Buffering with ScorexLogging {
+                                 remote: InetSocketAddress) extends Actor with ScorexLogging {
 
   import PeerConnectionHandler._
 
@@ -179,11 +181,13 @@ case class PeerConnectionHandler(application: RunnableApplication,
   private def processReceivedData(data: ByteString) = {
     val (pkt, remainder) = getPacket(chunksBuffer ++ data)
     chunksBuffer = remainder
+    
 
     pkt.find { packet =>
       application.messagesHandler.parseBytes(packet.toByteBuffer) match {
         case Success((spec, msgData)) =>
           log.trace("Received message " + spec + " from " + remote)
+          // Encryption setup messages need to be handled ASAP, so we're skipping asynchronous execution for them
           peerManager ! RawNetworkData(spec, msgData, remote)
           false
 
@@ -192,6 +196,42 @@ case class PeerConnectionHandler(application: RunnableApplication,
           true
       }
     }
+  }
+
+  //1 MB max packet size
+  val MAX_PACKET_LEN: Int = 1024*1024
+
+  /**
+    * Extracts complete packets of the specified length, preserving remainder
+    * data. If there is no complete packet, then we return an empty list. If
+    * there are multiple packets available, all packets are extracted, Any remaining data
+    * is returned to the caller for later submission
+    * @param data A list of the packets extracted from the raw data in order of receipt
+    * @return A list of ByteStrings containing extracted packets as well as any remaining buffer data not consumed
+    */
+
+  def getPacket(data: ByteString): (List[ByteString], ByteString) = {
+
+    val headerSize = 4
+
+    @tailrec
+    def multiPacket(packets: List[ByteString], current: ByteString): (List[ByteString], ByteString) = {
+      if (current.length < headerSize) {
+        (packets.reverse, current)
+      } else {
+        val len = current.iterator.getInt(ByteOrder.BIG_ENDIAN)
+        if (len > MAX_PACKET_LEN || len < 0) throw new Exception(s"Invalid packet length: $len")
+        if (current.length < len + headerSize) {
+          (packets.reverse, current)
+        } else {
+          val rem = current drop headerSize // Pop off header
+          val (front, back) = rem.splitAt(len) // Front contains a completed packet, back contains the remaining data
+          // Pull of the packet and recurse to see if there is another packet available
+          multiPacket(front :: packets, back)
+        }
+      }
+    }
+    multiPacket(List[ByteString](), data)
   }
 }
 

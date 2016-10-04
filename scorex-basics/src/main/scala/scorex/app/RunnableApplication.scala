@@ -8,7 +8,7 @@ import scorex.block.Block
 import scorex.consensus.ConsensusModule
 import scorex.consensus.mining.BlockGeneratorController
 import scorex.network._
-import scorex.network.message.{BasicMessagesRepo, MessageHandler, MessageSpec}
+import scorex.network.message.{BasicMessagesRepo, MessageHandler, MessageSpec, EncryptionMessagesRepo}
 import scorex.network.peer.PeerManager
 import scorex.settings.Settings
 import scorex.transaction.{BlockStorage, History, TransactionModule}
@@ -32,6 +32,7 @@ trait RunnableApplication extends Application with ScorexLogging {
   protected val additionalMessageSpecs: Seq[MessageSpec[_]]
 
   lazy val basicMessagesSpecsRepo: BasicMessagesRepo = new BasicMessagesRepo()
+  lazy val encryptionMessagesSpecsRepo: EncryptionMessagesRepo = new EncryptionMessagesRepo()
 
   // wallet, needs strict evaluation
   val wallet = {
@@ -43,7 +44,7 @@ trait RunnableApplication extends Application with ScorexLogging {
   lazy val upnp = new UPnP(settings)
   if (settings.upnpEnabled) upnp.addPort(settings.port)
 
-  lazy val messagesHandler: MessageHandler = MessageHandler(basicMessagesSpecsRepo.specs ++ additionalMessageSpecs)
+  lazy val messagesHandler: MessageHandler = MessageHandler(basicMessagesSpecsRepo.specs ++ additionalMessageSpecs ++ encryptionMessagesSpecsRepo.specs)
 
   lazy val peerManager = actorSystem.actorOf(Props(classOf[PeerManager], this))
 
@@ -58,6 +59,7 @@ trait RunnableApplication extends Application with ScorexLogging {
   lazy val blockchainSynchronizer = actorSystem.actorOf(Props(classOf[BlockchainSynchronizer], this), "BlockchainSynchronizer")
   lazy val coordinator = actorSystem.actorOf(Props(classOf[Coordinator], this), "Coordinator")
   lazy val historyReplier = actorSystem.actorOf(Props(classOf[HistoryReplier], this), "HistoryReplier")
+  lazy val encryptionHandler = actorSystem.actorOf(Props(classOf[EncryptionHandler], this), "EncryptionHandler")
 
   def run() {
     log.debug(s"Available processors: ${Runtime.getRuntime.availableProcessors}")
@@ -70,7 +72,7 @@ trait RunnableApplication extends Application with ScorexLogging {
     val combinedRoute = CompositeHttpService(actorSystem, apiTypes, apiRoutes, settings).compositeRoute
     Http().bindAndHandle(combinedRoute, settings.rpcAddress, settings.rpcPort)
 
-    Seq(scoreObserver, blockGenerator, blockchainSynchronizer, historyReplier, coordinator) foreach {
+    Seq(scoreObserver, blockGenerator, blockchainSynchronizer, historyReplier, coordinator, encryptionHandler) foreach {
       _ => // de-lazyning process :-)
     }
 
