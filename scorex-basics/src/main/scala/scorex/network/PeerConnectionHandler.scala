@@ -3,7 +3,7 @@ package scorex.network
 import java.net.InetSocketAddress
 import java.nio.ByteOrder
 
-import akka.actor.{Actor, ActorRef, Terminated}
+import akka.actor.{Actor, ActorRef, Status, Terminated}
 import akka.io.Tcp
 import akka.io.Tcp._
 import akka.util.{ByteString, CompactByteString}
@@ -170,6 +170,7 @@ case class PeerConnectionHandler(application: RunnableApplication,
 
     case CloseConnection =>
       log.info(s"Enforced to close communication with: " + remote + s" in state $stateName")
+      sender() ! Status.Success()
       context stop self
 
     case CommandFailed(cmd: Tcp.Command) =>

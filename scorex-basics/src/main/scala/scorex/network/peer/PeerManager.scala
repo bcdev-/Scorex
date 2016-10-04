@@ -1,19 +1,20 @@
 package scorex.network.peer
 
 import java.net.InetSocketAddress
-
-import akka.actor.{Actor, ActorRef}
+import akka.actor.{Actor, ActorRef, Status}
+import akka.pattern._
 import scorex.app.Application
 import scorex.network.NetworkController.{SendToNetwork, ShutdownNetwork}
 import scorex.network._
 import scorex.network.message.MessageHandler.RawNetworkData
 import scorex.network.message.{Message, MessageSpec}
 import scorex.utils.ScorexLogging
-
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.Random
+import akka.util.Timeout
 
 /**
   * Must be singleton
@@ -31,6 +32,7 @@ class PeerManager(application: Application) extends Actor with ScorexLogging {
   val blacklistResendInterval = settings.blacklistResidenceTimeMilliseconds.milliseconds / 10
   private implicit val system = context.system
   private val connectedPeers = mutable.Map[InetSocketAddress, PeerConnection]()
+  private val suspects = mutable.Map.empty[InetSocketAddress, Int]
   private val peerDatabase: PeerDatabase = new PeerDatabaseImpl(settings, settings.dataDirOpt.map(f => f + "/peers.dat"))
 
   private val visitPeersInterval = application.settings.peersDataResidenceTime / 10
@@ -55,7 +57,10 @@ class PeerManager(application: Application) extends Actor with ScorexLogging {
 
     case MarkConnectedPeersVisited => handshakedPeers.foreach(peerDatabase.touch)
 
-    case ShutdownNetwork => connectedPeers.values.foreach(_.handlerRef ! CloseConnection)
+    case ShutdownNetwork =>
+      val s = sender()
+      implicit val askTimeout = Timeout(10 seconds)
+      Future.sequence(connectedPeers.values.map(_.handlerRef ? CloseConnection)).map(_ => Status.Success()).pipeTo(s)
 
   }: Receive) orElse blacklistOperations orElse peerListOperations orElse peerCycle
 
@@ -86,7 +91,9 @@ class PeerManager(application: Application) extends Actor with ScorexLogging {
 
     case SendToNetwork(message, sendingStrategy) => sendDataToNetwork(message, sendingStrategy)
 
-    case Disconnected(remote) => disconnect(remote)
+    case Disconnected(remote) =>
+      disconnect(remote)
+      sender() ! Status.Success
   }
 
   private def isBlacklisted(address: InetSocketAddress): Boolean =
@@ -231,14 +238,26 @@ class PeerManager(application: Application) extends Actor with ScorexLogging {
         listener ! ExistedBlacklist(peerDatabase.getBlacklist.toSeq)
       }
 
-    case AddToBlacklist(nodeNonce, address) =>
-      log.info(s"Blacklist peer $address")
-      peerDatabase.blacklistHost(address.getHostName)
-      connectedPeers.remove(address).foreach(_.handlerRef ! CloseConnection)
+    case AddToBlacklist(address) =>
+      addPeerToBlacklist(address)
 
-      blacklistListeners.foreach { listener =>
-        listener ! BlackListUpdated(address.getHostName)
+    case Suspect(address) =>
+      val count = suspects.getOrElse(address, 0)
+      suspects.put(address, count + 1)
+      if (count >= settings.blacklistThreshold) {
+        suspects.remove(address)
+        addPeerToBlacklist(address)
       }
+  }
+
+  private def addPeerToBlacklist(address: InetSocketAddress): Unit = {
+    log.info(s"Blacklist peer $address")
+    peerDatabase.blacklistHost(address.getHostName)
+    connectedPeers.remove(address).foreach(_.handlerRef ! CloseConnection)
+
+    blacklistListeners.foreach { listener =>
+      listener ! BlackListUpdated(address.getHostName)
+    }
   }
 
   private def handshakedPeers = connectedPeers.filter(_._2.handshake.isDefined).keySet
@@ -256,7 +275,7 @@ object PeerManager {
 
   case class Disconnected(remote: InetSocketAddress)
 
-  case class AddToBlacklist(nodeNonce: Long, address: InetSocketAddress)
+  case class AddToBlacklist(address: InetSocketAddress)
 
   case class GetRandomPeersToBroadcast(howMany: Int)
 
@@ -287,5 +306,7 @@ object PeerManager {
   private case object MarkConnectedPeersVisited
 
   case object BlacklistResendRequired
+
+  case class Suspect(address: InetSocketAddress)
 
 }

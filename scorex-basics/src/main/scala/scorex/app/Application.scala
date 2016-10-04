@@ -39,6 +39,8 @@ trait Application {
   val blockchainSynchronizer: ActorRef
 
   val scoreObserver: ActorRef
+  
+  val encryptionHandler: ActorRef // TODO: Think about it...
 
   val settings: Settings
 
