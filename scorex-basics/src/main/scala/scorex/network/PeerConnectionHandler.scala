@@ -2,6 +2,7 @@ package scorex.network
 
 import java.net.InetSocketAddress
 import java.nio.ByteOrder
+import java.security.SecureRandom
 
 import akka.actor.{Actor, ActorRef, Status, Terminated}
 import akka.io.Tcp
@@ -14,6 +15,7 @@ import scorex.network.peer.PeerManager
 import scorex.network.peer.PeerManager.Handshaked
 import scorex.utils.ScorexLogging
 import scorex.network.message.MessageSpec
+import scorex.crypto.EllipticCurveImpl
 
 import scala.annotation.tailrec
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -182,22 +184,50 @@ case class PeerConnectionHandler(application: RunnableApplication,
 
   // TODO: CONSIDER MOVING TO IT'S OWN CLASS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
   
-  private def handleEncryptionPubKeyMessage(content: Any) = {
+  private var encryptionPrivateKey: Array[Byte] = generatePrivateKey()
+  private var encryptionPublicKey: Option[Array[Byte]] = None
+
+  private def generatePrivateKey(): Array[Byte] = {
+//    def b(x: Byte): Byte = x: (x: Byte)Byte
     
+    val rand = new SecureRandom()
+    var key = Array[Byte](8)
+    rand.nextBytes(key)
+    key.update(0, (key.apply(0) & 248).toByte)
+    key.update(31, (key.apply(31) & 127).toByte)
+    key.update(31, (key.apply(31) | 64).toByte)
+    
+//    key[0] &= 248
+//    key[31] &= 127
+//    key[31] |= 64
+    key
+  }
+
+  private def handleEncryptionPubKeyMessage(content: Any) = {
+    var key = content.asInstanceOf[Array[Byte]]
+    assert(key.length == EllipticCurveImpl.KeyLength, "Key length is incorrect")
+
+    encryptionPublicKey = Some(key)
+    
+    val outgoingDH = 13
+    val incomingDH = 14
+    
+    log.trace(s"Encrypted communication: encryptionPrivateKey $encryptionPrivateKey" +
+        s"encryptionPublicKey $encryptionPublicKey outgoingDH $outgoingDH incomingDH $incomingDH")
   }
 
   private def handleStartEncryptionMessage() = {
     
   }
   
-  private def handleOutOfBandMessages(spec: MessageSpec[_], msgBytes: Array[Byte]) = {
+  private def handleOutOfBandMessage(spec: MessageSpec[_], msgBytes: Array[Byte]) = {
     val repo = application.encryptionMessagesSpecsRepo
 
     spec.deserializeData(msgBytes) match {
       case Success(content) =>
         spec.messageCode match {
           case repo.EncryptionPubKey.messageCode =>
-            handleEncryptionPubKeyMessage(content)
+            handleEncryptionPubKeyMessage(msgBytes)
 
           case repo.StartEncryption.messageCode =>
             handleStartEncryptionMessage()
@@ -214,7 +244,6 @@ case class PeerConnectionHandler(application: RunnableApplication,
   private def processReceivedData(data: ByteString) = {
     val (pkt, remainder) = getPacket(chunksBuffer ++ data)
     chunksBuffer = remainder
-    
 
     pkt.find { packet =>
       application.messagesHandler.parseBytes(packet.toByteBuffer) match {
@@ -222,7 +251,7 @@ case class PeerConnectionHandler(application: RunnableApplication,
           // Encryption setup messages need to be handled immediately, so we're skipping asynchronous execution for them
           if (spec.out_of_band == true) {
             log.trace("Received an out of band message " + spec + " from " + remote)
-            handleOutOfBandMessages(spec)
+            handleOutOfBandMessage(spec, msgData)
           } else {
             log.trace("Received a message " + spec + " from " + remote)
             peerManager ! RawNetworkData(spec, msgData, remote)
