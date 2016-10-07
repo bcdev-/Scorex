@@ -1,7 +1,6 @@
 package scorex.crypto.hash
 
 import com.typesafe.config.ConfigFactory
-import scorex.crypto.hash.CryptographicHash._
 import scorex.utils._
 
 import scala.util.Try

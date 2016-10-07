@@ -6,7 +6,7 @@ import akka.http.scaladsl.model.{ContentTypes, HttpEntity, StatusCode}
 import akka.http.scaladsl.server.{Directive0, Directives, Route}
 import akka.util.Timeout
 import play.api.libs.json.JsValue
-import scorex.crypto.hash.CryptographicHash.Digest
+import scorex.crypto.hash.SecureCryptographicHash.Digest
 import scorex.crypto.hash.SecureCryptographicHash
 import scorex.settings.Settings
 
