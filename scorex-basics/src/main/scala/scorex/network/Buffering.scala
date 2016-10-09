@@ -1,19 +1,31 @@
 package scorex.network
 
+import java.net.InetSocketAddress
 import java.nio.ByteOrder
+import java.security.SecureRandom
+
+import javax.crypto.Cipher
+import javax.crypto.spec.{SecretKeySpec, IvParameterSpec}
 
 import akka.util.ByteString
+import scorex.crypto.EllipticCurveImpl
+import scorex.crypto.signatures.SigningFunctions._
+import scorex.utils.ScorexLogging
 
 import scala.annotation.tailrec
 
-/**
-  * Taken from https://stackoverflow.com/questions/30665811/scala-tcp-packet-frame-using-akka
-  */
-
-trait Buffering {
+trait Buffering extends ScorexLogging {
 
   //1 MB max packet size
-  val MAX_PACKET_LEN: Int = 1024*1024
+  val MAX_PACKET_LEN: Int = 1024 * 1024
+
+  val remote: InetSocketAddress
+
+  def decryptStream(incoming: ByteString) : ByteString =
+    if(incomingDataEncrypted)
+      ByteString(inCipher.update(incoming.to[Array]))
+    else
+      incoming
 
   /**
     * Extracts complete packets of the specified length, preserving remainder
@@ -47,4 +59,63 @@ trait Buffering {
     }
     multiPacket(List[ByteString](), data)
   }
+
+  protected var encryptionKeys: (PrivateKey, PublicKey) = generatePrivateKey()
+  protected var encryptionRemotePublicKey: Option[PublicKey] = None
+  private var incomingDataEncrypted = false
+  private val inCipher: Cipher = Cipher.getInstance("AES/CFB8/NoPadding")
+  private val outCipher: Cipher = Cipher.getInstance("AES/CFB8/NoPadding")
+
+  private def generatePrivateKey(): (PrivateKey, PublicKey) = {
+    val rand = new SecureRandom()
+    val seed = Array[Byte](32, 0)
+    rand.nextBytes(seed)
+    EllipticCurveImpl.createKeyPair(seed)
+  }
+
+  def xor(a: Array[Byte], b: Array[Byte]): Array[Byte] = {
+    require(a.length == b.length, "Byte arrays have to have the same length")
+
+    (a.toList zip b.toList).map(elements => (elements._1 ^ elements._2).toByte).toArray
+  } // TODO: Understand this piece of code. :-)
+
+  protected def handleEncryptionPubKeyMessage(content: Any) = {
+    val key = content.asInstanceOf[Array[Byte]]
+    assert(key.length == EllipticCurveImpl.KeyLength, "Key length is incorrect")
+    assert(encryptionRemotePublicKey == None, s"$remote tried to send us a second encryption key")
+
+    encryptionRemotePublicKey = Some(key)
+
+    val sharedSecret = EllipticCurveImpl.createSharedSecret(encryptionKeys._1, key)
+
+    val inPadding = Array[Byte](0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
+      0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55)
+    val outPadding = Array[Byte](-86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86,
+      -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86)
+
+    val inSharedSecret = scorex.crypto.hash.Blake2b256.hash(xor(sharedSecret, inPadding)).slice(0, 16)
+    val outSharedSecret = scorex.crypto.hash.Blake2b256.hash(xor(sharedSecret, outPadding)).slice(0, 16)
+
+    val inIV = scorex.crypto.hash.Blake2b256.hash(inSharedSecret).slice(0, 16)
+    val outIV = scorex.crypto.hash.Blake2b256.hash(outSharedSecret).slice(0, 16)
+
+    val inSpec = new SecretKeySpec(inSharedSecret, "AES")
+    val outSpec = new SecretKeySpec(outSharedSecret, "AES")
+
+    inCipher.init(Cipher.DECRYPT_MODE, inSpec, new IvParameterSpec(inIV))
+    outCipher.init(Cipher.ENCRYPT_MODE, outSpec, new IvParameterSpec(outIV))
+
+    log.trace(s"Received remote key from the peer.")
+  }
+
+  protected def handleStartEncryptionMessage() = {
+    if(encryptionRemotePublicKey != None && incomingDataEncrypted == false) {
+      log.trace(s"Starting encrypted channel with $remote")
+      incomingDataEncrypted = true
+    } else {
+      log.trace(s"$remote tried to start encryption twice")
+      // TODO: Disconnect
+    }
+  }
+
 }

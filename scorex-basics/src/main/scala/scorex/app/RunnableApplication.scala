@@ -8,7 +8,7 @@ import scorex.api.http.{ApiRoute, CompositeHttpService}
 import scorex.block.Block
 import scorex.consensus.mining.BlockGeneratorController
 import scorex.network._
-import scorex.network.message.{BasicMessagesRepo, MessageHandler, MessageSpec}
+import scorex.network.message.{BasicMessagesRepo, MessageHandler, MessageSpec, EncryptionMessagesRepo}
 import scorex.network.peer.PeerManager
 import scorex.settings.Settings
 import scorex.transaction.{BlockStorage, History}
@@ -35,6 +35,7 @@ trait RunnableApplication extends Application with ScorexLogging {
   protected val additionalMessageSpecs: Seq[MessageSpec[_]]
 
   lazy override val basicMessagesSpecsRepo: BasicMessagesRepo = new BasicMessagesRepo()
+  lazy override val encryptionMessagesSpecsRepo: EncryptionMessagesRepo = new EncryptionMessagesRepo()
 
   // wallet, needs strict evaluation
   override val wallet = {
@@ -46,7 +47,7 @@ trait RunnableApplication extends Application with ScorexLogging {
   lazy val upnp = new UPnP(settings)
   if (settings.upnpEnabled) upnp.addPort(settings.port)
 
-  lazy val messagesHandler: MessageHandler = MessageHandler(basicMessagesSpecsRepo.specs ++ additionalMessageSpecs)
+  lazy val messagesHandler: MessageHandler = MessageHandler(basicMessagesSpecsRepo.specs ++ additionalMessageSpecs ++ encryptionMessagesSpecsRepo.specs)
 
   lazy override val peerManager = actorSystem.actorOf(Props(classOf[PeerManager], this))
 
