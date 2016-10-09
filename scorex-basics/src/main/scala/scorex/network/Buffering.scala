@@ -3,65 +3,56 @@ package scorex.network
 import java.net.InetSocketAddress
 import java.nio.ByteOrder
 import java.security.SecureRandom
-
 import javax.crypto.Cipher
-import javax.crypto.spec.{SecretKeySpec, IvParameterSpec}
+import javax.crypto.spec.{IvParameterSpec, SecretKeySpec}
 
 import akka.util.ByteString
+import scorex.app.RunnableApplication
 import scorex.crypto.EllipticCurveImpl
 import scorex.crypto.signatures.SigningFunctions._
+import scorex.network.message.MessageHandler.RawNetworkData
+import scorex.network.message.MessageSpec
 import scorex.utils.ScorexLogging
 
 import scala.annotation.tailrec
+import scala.util.{Failure, Success, Try}
 
 trait Buffering extends ScorexLogging {
-
   //1 MB max packet size
   val MAX_PACKET_LEN: Int = 1024 * 1024
 
-  val remote: InetSocketAddress
+  protected val remote: InetSocketAddress
+  protected val application: RunnableApplication
 
-  def decryptStream(incoming: ByteString) : ByteString =
+  private def decryptStream(incoming: ByteString) : ByteString =
     if(incomingDataEncrypted)
       ByteString(inCipher.update(incoming.to[Array]))
     else
       incoming
 
-  /**
-    * Extracts complete packets of the specified length, preserving remainder
-    * data. If there is no complete packet, then we return an empty list. If
-    * there are multiple packets available, all packets are extracted, Any remaining data
-    * is returned to the caller for later submission
-    * @param data A list of the packets extracted from the raw data in order of receipt
-    * @return A list of ByteStrings containing extracted packets as well as any remaining buffer data not consumed
-    */
+  protected def handleOutOfBandMessage(spec: MessageSpec[_], msgBytes: Array[Byte]) = Try {
+    val repo = application.encryptionMessagesSpecsRepo
 
-  def getPacket(data: ByteString): (List[ByteString], ByteString) = {
+    spec.deserializeData(msgBytes) match {
+      case Success(content) =>
+        spec.messageCode match {
+          case repo.EncryptionPubKey.messageCode =>
+            handleEncryptionPubKeyMessage(msgBytes)
 
-    val headerSize = 4
+          case repo.StartEncryption.messageCode =>
+            handleStartEncryptionMessage()
 
-    @tailrec
-    def multiPacket(packets: List[ByteString], current: ByteString): (List[ByteString], ByteString) = {
-      if (current.length < headerSize) {
-        (packets.reverse, current)
-      } else {
-        val len = current.iterator.getInt(ByteOrder.BIG_ENDIAN)
-        if (len > MAX_PACKET_LEN || len < 0) throw new Exception(s"Invalid packet length: $len")
-        if (current.length < len + headerSize) {
-          (packets.reverse, current)
-        } else {
-          val rem = current drop headerSize // Pop off header
-          val (front, back) = rem.splitAt(len) // Front contains a completed packet, back contains the remaining data
-          // Pull of the packet and recurse to see if there is another packet available
-          multiPacket(front :: packets, back)
+          case msgId =>
+            log.error(s"No handlers found for an out of bound message: $msgId, this should never happen!")
         }
-      }
+      case Failure(e) =>
+        log.error("Failed to deserialize an out of bound message: " + e.getMessage)
+      //TODO: disconnect
     }
-    multiPacket(List[ByteString](), data)
   }
 
-  protected var encryptionKeys: (PrivateKey, PublicKey) = generatePrivateKey()
-  protected var encryptionRemotePublicKey: Option[PublicKey] = None
+  protected val encryptionKeys: (PrivateKey, PublicKey) = generatePrivateKey()
+  private var encryptionRemotePublicKey: Option[PublicKey] = None
   private var incomingDataEncrypted = false
   private val inCipher: Cipher = Cipher.getInstance("AES/CFB8/NoPadding")
   private val outCipher: Cipher = Cipher.getInstance("AES/CFB8/NoPadding")
@@ -73,7 +64,7 @@ trait Buffering extends ScorexLogging {
     EllipticCurveImpl.createKeyPair(seed)
   }
 
-  def xor(a: Array[Byte], b: Array[Byte]): Array[Byte] = {
+  private def xor(a: Array[Byte], b: Array[Byte]): Array[Byte] = {
     require(a.length == b.length, "Byte arrays have to have the same length")
 
     (a.toList zip b.toList).map(elements => (elements._1 ^ elements._2).toByte).toArray
@@ -116,6 +107,64 @@ trait Buffering extends ScorexLogging {
       log.trace(s"$remote tried to start encryption twice")
       // TODO: Disconnect
     }
+  }
+
+  def parseOutOfBandMessage(packet: ByteString) = {
+      application.messagesHandler.parseBytes(packet.toByteBuffer) match {
+        case Success((spec, msgData)) =>
+          if (spec.out_of_band == true) {
+            log.trace("Received an out of band message " + spec + " from " + remote)
+            handleOutOfBandMessage(spec, msgData) match {
+              case Success(e) =>
+              case Failure(e) => {
+                log.trace(s"$e")
+                log.info(s"Out of band message error, disconnecting from $remote")
+                // TODO: Disconnect
+              }
+            }
+          }
+          true
+        case Failure(e) =>
+          false
+      }
+  }
+
+  /**
+    * Extracts complete packets of the specified length, preserving remainder
+    * data. If there is no complete packet, then we return an empty list. If
+    * there are multiple packets available, all packets are extracted, Any remaining data
+    * is returned to the caller for later submission
+    * @param data A list of the packets extracted from the raw data in order of receipt
+    * @return A list of ByteStrings containing extracted packets as well as any remaining buffer data not consumed
+    */
+
+  def getPacket(data: ByteString): (List[ByteString], ByteString) = {
+
+    val headerSize = 4
+
+    @tailrec
+    def multiPacket(packets: List[ByteString], current: ByteString): (List[ByteString], ByteString) = {
+      if (current.length < headerSize) {
+        (packets.reverse, current)
+      } else {
+        val header = decryptStream(current.iterator.getByteString(headerSize))
+        val len = header.iterator.getInt(ByteOrder.BIG_ENDIAN)
+        if (len > MAX_PACKET_LEN || len < 0) throw new Exception(s"Invalid packet length: $len")
+        if (current.length < len + headerSize) {
+          (packets.reverse, current)
+        } else {
+          val packet_chunk = current drop headerSize
+          val remaining = packet_chunk drop len
+          val content = decryptStream(packet_chunk.iterator.getByteString(len))
+
+          if (parseOutOfBandMessage(content))
+            multiPacket(packets, remaining)
+          else
+            multiPacket(content :: packets, remaining)
+        }
+      }
+    }
+    multiPacket(List[ByteString](), data)
   }
 
 }

@@ -19,11 +19,13 @@ import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
 
-case class PeerConnectionHandler(application: RunnableApplication,
+case class PeerConnectionHandler(override val application: RunnableApplication,
                                  connection: ActorRef,
                                  override val remote: InetSocketAddress) extends Actor with Buffering with ScorexLogging {
 
   import PeerConnectionHandler._
+
+//  app = application
 
   private lazy val peerManager = application.peerManager
 
@@ -187,49 +189,15 @@ case class PeerConnectionHandler(application: RunnableApplication,
 
   // MOVE TO BUFFERING!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  private def handleOutOfBandMessage(spec: MessageSpec[_], msgBytes: Array[Byte]) = Try {
-    val repo = application.encryptionMessagesSpecsRepo
-
-    spec.deserializeData(msgBytes) match {
-      case Success(content) =>
-        spec.messageCode match {
-          case repo.EncryptionPubKey.messageCode =>
-            handleEncryptionPubKeyMessage(msgBytes)
-
-          case repo.StartEncryption.messageCode =>
-            handleStartEncryptionMessage()
-
-          case msgId =>
-            log.error(s"No handlers found for an out of bound message: $msgId, this should never happen!")
-        }
-      case Failure(e) =>
-        log.error("Failed to deserialize an out of bound message: " + e.getMessage)
-        //TODO: disconnect
-    }
-  }
-
   private def processReceivedData(data: ByteString) = {
-    val (pkt, remainder) = getPacket(chunksBuffer ++ decryptStream(data))
+    val (pkt, remainder) = getPacket(chunksBuffer ++ data)
     chunksBuffer = remainder
 
     pkt.find { packet =>
       application.messagesHandler.parseBytes(packet.toByteBuffer) match {
         case Success((spec, msgData)) =>
-          // Encryption setup messages need to be handled immediately, so we're skipping asynchronous execution for them
-          if (spec.out_of_band == true) {
-            log.trace("Received an out of band message " + spec + " from " + remote)
-            handleOutOfBandMessage(spec, msgData) match {
-              case Success(e) =>
-              case Failure(e) => {
-                log.trace(s"$e")
-                log.info(s"Out of band message error, disconnecting from $remote")
-                // TODO: Disconnect
-              }
-            }
-          } else {
-            log.trace("Received a message " + spec + " from " + remote)
-            peerManager ! RawNetworkData(spec, msgData, remote)
-          }
+          log.trace("Received a message " + spec + " from " + remote)
+          peerManager ! RawNetworkData(spec, msgData, remote)
           false
 
         case Failure(e) =>
