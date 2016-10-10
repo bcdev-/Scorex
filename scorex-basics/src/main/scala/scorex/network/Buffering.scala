@@ -23,6 +23,7 @@ trait Buffering extends ScorexLogging {
 
   protected val remote: InetSocketAddress
   protected val application: RunnableApplication
+  protected val inbound: Boolean
 
   private def decryptStream(incoming: ByteString) : ByteString =
     if(incomingDataEncrypted)
@@ -79,10 +80,18 @@ trait Buffering extends ScorexLogging {
 
     val sharedSecret = EllipticCurveImpl.createSharedSecret(encryptionKeys._1, key)
 
-    val inPadding = Array[Byte](0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
-      0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55)
-    val outPadding = Array[Byte](-86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86,
-      -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86)
+    def getPadding = {
+      val paddingPattern1 = Array[Byte](0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
+        0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55)
+      val paddingPattern2 = Array[Byte](-86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86,
+        -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86, -86)
+      if (inbound)
+        (paddingPattern1, paddingPattern2)
+      else
+        (paddingPattern2, paddingPattern1)
+    }
+
+    val (inPadding, outPadding) = getPadding
 
     val inSharedSecret = scorex.crypto.hash.Blake2b256.hash(xor(sharedSecret, inPadding)).slice(0, 16)
     val outSharedSecret = scorex.crypto.hash.Blake2b256.hash(xor(sharedSecret, outPadding)).slice(0, 16)
@@ -109,6 +118,7 @@ trait Buffering extends ScorexLogging {
     }
   }
 
+  // TODO: Don't interpret packets twice... Maybe?
   def parseOutOfBandMessage(packet: ByteString) = {
       application.messagesHandler.parseBytes(packet.toByteBuffer) match {
         case Success((spec, msgData)) =>

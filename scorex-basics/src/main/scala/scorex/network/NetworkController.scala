@@ -165,7 +165,7 @@ class NetworkController(application: RunnableApplication) extends Actor with Sco
   }
 
   private def createPeerHandler(connection: ActorRef, remote: InetSocketAddress, inbound: Boolean): Unit = {
-    val handler = context.actorOf(Props(classOf[PeerConnectionHandler], application, connection, remote))
+    val handler = context.actorOf(Props(classOf[PeerConnectionHandler], application, connection, remote, inbound))
     peerManager ! PeerManager.Connected(remote, handler, ownSocketAddress, inbound)
   }
 }

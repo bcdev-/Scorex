@@ -21,7 +21,8 @@ import scala.util.{Failure, Success, Try}
 
 case class PeerConnectionHandler(override val application: RunnableApplication,
                                  connection: ActorRef,
-                                 override val remote: InetSocketAddress) extends Actor with Buffering with ScorexLogging {
+                                 override val remote: InetSocketAddress,
+                                 override val inbound: Boolean) extends Actor with Buffering with ScorexLogging {
 
   import PeerConnectionHandler._
 
