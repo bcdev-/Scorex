@@ -50,14 +50,26 @@ case class PeerConnectionHandler(override val application: RunnableApplication,
     timeout.cancel()
   }
 
+  override def sendStartEncryption = context.system.scheduler.scheduleOnce(100 milliseconds, new Runnable {
+    def run(): Unit = {
+      val pubKeyMessage = application.encryptionMessagesSpecsRepo.StartEncryption.serializeData()
+      val msg = scorex.network.message.Message(application.encryptionMessagesSpecsRepo.StartEncryption,
+        Left(pubKeyMessage), None)
+      sendMessage(msg, Ack)
+      outgoingDataIsEncrypted = true
+      log.trace("Starting encryption")
+    }
+  })
+
   // We need to make sure that the message is interpreted after the handshake.
   // Sleeping is the easiest, though obscure way to achieve that.
   // TODO: Magic number
-  def sendPublicKey = context.system.scheduler.scheduleOnce(100 milliseconds, new Runnable {
+  def sendPublicKey = context.system.scheduler.scheduleOnce(10 milliseconds, new Runnable {
     def run(): Unit = {
       val pubKeyMessage = application.encryptionMessagesSpecsRepo.EncryptionPubKey.serializeData(encryptionKeys._2)
-      val msg = scorex.network.message.Message(application.encryptionMessagesSpecsRepo.EncryptionPubKey, Left(pubKeyMessage), None)
-      sendMessage(msg, NoAck)
+      val msg = scorex.network.message.Message(application.encryptionMessagesSpecsRepo.EncryptionPubKey,
+        Left(pubKeyMessage), None)
+      sendMessage(msg, Ack)
     }
   })
 
@@ -125,9 +137,11 @@ case class PeerConnectionHandler(override val application: RunnableApplication,
   private def sendMessage(msg: message.Message[_], ack: Event) = {
     log.trace("Sending message " + msg.spec + " to " + remote)
     val bytes = msg.bytes
-    val data = ByteString(Ints.toByteArray(bytes.length) ++ bytes)
-    buffer(encryptStream(data))
-    connection ! Write(data, ack)
+    println(s"outENCRYPTION IS $outgoingDataIsEncrypted")
+    val data = encryptStream(ByteString(Ints.toByteArray(bytes.length) ++ bytes))
+//    if(ack == Ack)
+    buffer(data)
+//    connection ! Write(data, ack)
   }
 
   private def workingCycle: Receive = state(CommunicationState.WorkingCycle) {

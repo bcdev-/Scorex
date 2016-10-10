@@ -10,7 +10,6 @@ import akka.util.ByteString
 import scorex.app.RunnableApplication
 import scorex.crypto.EllipticCurveImpl
 import scorex.crypto.signatures.SigningFunctions._
-import scorex.network.message.MessageHandler.RawNetworkData
 import scorex.network.message.MessageSpec
 import scorex.utils.ScorexLogging
 
@@ -26,14 +25,18 @@ trait Buffering extends ScorexLogging {
   protected val inbound: Boolean
 
   protected def encryptStream(outgoing: ByteString) : ByteString =
-    if(outgoingDataIsEncrypted)
-      ByteString(outCipher.update(outgoing.to[Array]))
+    if(outgoingDataIsEncrypted) {
+      val out = ByteString(outCipher.update(outgoing.to[Array]))
+      out
+    }
     else
       outgoing
 
   private def decryptStream(incoming: ByteString) : ByteString =
-    if(incomingDataIsEncrypted)
-      ByteString(inCipher.update(incoming.to[Array]))
+    if(incomingDataIsEncrypted) {
+      val out = ByteString(inCipher.update(incoming.to[Array]))
+      out
+    }
     else
       incoming
 
@@ -78,6 +81,8 @@ trait Buffering extends ScorexLogging {
     (a.toList zip b.toList).map(elements => (elements._1 ^ elements._2).toByte).toArray
   } // TODO: Understand this piece of code. :-)
 
+  def sendStartEncryption
+
   protected def handleEncryptionPubKeyMessage(content: Any) = {
     val key = content.asInstanceOf[Array[Byte]]
     assert(key.length == EllipticCurveImpl.KeyLength, "Key length is incorrect")
@@ -112,7 +117,8 @@ trait Buffering extends ScorexLogging {
     inCipher.init(Cipher.DECRYPT_MODE, inSpec, new IvParameterSpec(inIV))
     outCipher.init(Cipher.ENCRYPT_MODE, outSpec, new IvParameterSpec(outIV))
 
-    log.trace(s"Received remote key from the peer. 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
+    log.trace(s"Received remote key from the peer.")
+    sendStartEncryption
   }
 
   protected def handleStartEncryptionMessage() = {
@@ -120,27 +126,26 @@ trait Buffering extends ScorexLogging {
       log.trace(s"Starting encrypted channel with $remote")
       incomingDataIsEncrypted = true
     } else {
-      log.trace(s"$remote tried to start encryption twice")
-      // TODO: Disconnect
+      throw new Exception(s"$remote tried to start encryption twice")
     }
   }
 
   // TODO: Don't interpret packets twice... Maybe?
-  def parseOutOfBandMessage(packet: ByteString) = {
+  def parseOutOfBandMessage(packet: ByteString): Boolean = {
       application.messagesHandler.parseBytes(packet.toByteBuffer) match {
         case Success((spec, msgData)) =>
           if (spec.out_of_band == true) {
             log.trace("Received an out of band message " + spec + " from " + remote)
             handleOutOfBandMessage(spec, msgData) match {
-              case Success(e) =>
+              case Success(e) => return true
               case Failure(e) => {
                 log.trace(s"$e")
-                log.info(s"Out of band message error, disconnecting from $remote")
-                // TODO: Disconnect
+//                log.info(s, disconnecting from $remote")
+                throw e
               }
             }
           }
-          true
+          false
         case Failure(e) =>
           false
       }
@@ -164,6 +169,7 @@ trait Buffering extends ScorexLogging {
       if (current.length < headerSize) {
         (packets.reverse, current)
       } else {
+        println(s"inENCRYPTION IS $incomingDataIsEncrypted")
         val header = decryptStream(current.iterator.getByteString(headerSize))
         val len = header.iterator.getInt(ByteOrder.BIG_ENDIAN)
         if (len > MAX_PACKET_LEN || len < 0) throw new Exception(s"Invalid packet length: $len")
@@ -172,6 +178,7 @@ trait Buffering extends ScorexLogging {
         } else {
           val packet_chunk = current drop headerSize
           val remaining = packet_chunk drop len
+          println(remaining.length)
           val content = decryptStream(packet_chunk.iterator.getByteString(len))
 
           if (parseOutOfBandMessage(content))
