@@ -50,12 +50,21 @@ case class PeerConnectionHandler(override val application: RunnableApplication,
     timeout.cancel()
   }
 
-  override def receive: Receive = state(CommunicationState.AwaitingHandshake) {
-    case h: Handshake =>
-      connection ! Write(ByteString(h.bytes), Ack)
+  // We need to make sure that the message is interpreted after the handshake.
+  // Sleeping is the easiest, though obscure way to achieve that.
+  // TODO: Magic number
+  def sendPublicKey = context.system.scheduler.scheduleOnce(100 milliseconds, new Runnable {
+    def run(): Unit = {
       val pubKeyMessage = application.encryptionMessagesSpecsRepo.EncryptionPubKey.serializeData(encryptionKeys._2)
       val msg = scorex.network.message.Message(application.encryptionMessagesSpecsRepo.EncryptionPubKey, Left(pubKeyMessage), None)
       sendMessage(msg, NoAck)
+    }
+  })
+
+  override def receive: Receive = state(CommunicationState.AwaitingHandshake) {
+    case h: Handshake =>
+      connection ! Write(ByteString(h.bytes), Ack)
+      sendPublicKey
       log.debug(s"Handshake has been sent to $remote")
 
     case Ack =>
@@ -117,7 +126,7 @@ case class PeerConnectionHandler(override val application: RunnableApplication,
     log.trace("Sending message " + msg.spec + " to " + remote)
     val bytes = msg.bytes
     val data = ByteString(Ints.toByteArray(bytes.length) ++ bytes)
-    buffer(data)
+    buffer(encryptStream(data))
     connection ! Write(data, ack)
   }
 

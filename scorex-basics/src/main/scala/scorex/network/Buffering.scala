@@ -25,8 +25,14 @@ trait Buffering extends ScorexLogging {
   protected val application: RunnableApplication
   protected val inbound: Boolean
 
+  protected def encryptStream(outgoing: ByteString) : ByteString =
+    if(outgoingDataIsEncrypted)
+      ByteString(outCipher.update(outgoing.to[Array]))
+    else
+      outgoing
+
   private def decryptStream(incoming: ByteString) : ByteString =
-    if(incomingDataEncrypted)
+    if(incomingDataIsEncrypted)
       ByteString(inCipher.update(incoming.to[Array]))
     else
       incoming
@@ -54,7 +60,8 @@ trait Buffering extends ScorexLogging {
 
   protected val encryptionKeys: (PrivateKey, PublicKey) = generatePrivateKey()
   private var encryptionRemotePublicKey: Option[PublicKey] = None
-  private var incomingDataEncrypted = false
+  private var incomingDataIsEncrypted = false
+  protected var outgoingDataIsEncrypted = false
   private val inCipher: Cipher = Cipher.getInstance("AES/CFB8/NoPadding")
   private val outCipher: Cipher = Cipher.getInstance("AES/CFB8/NoPadding")
 
@@ -105,13 +112,13 @@ trait Buffering extends ScorexLogging {
     inCipher.init(Cipher.DECRYPT_MODE, inSpec, new IvParameterSpec(inIV))
     outCipher.init(Cipher.ENCRYPT_MODE, outSpec, new IvParameterSpec(outIV))
 
-    log.trace(s"Received remote key from the peer.")
+    log.trace(s"Received remote key from the peer. 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
   }
 
   protected def handleStartEncryptionMessage() = {
-    if(encryptionRemotePublicKey != None && incomingDataEncrypted == false) {
+    if(encryptionRemotePublicKey != None && incomingDataIsEncrypted == false) {
       log.trace(s"Starting encrypted channel with $remote")
-      incomingDataEncrypted = true
+      incomingDataIsEncrypted = true
     } else {
       log.trace(s"$remote tried to start encryption twice")
       // TODO: Disconnect
