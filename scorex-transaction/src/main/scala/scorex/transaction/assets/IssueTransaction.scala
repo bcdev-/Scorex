@@ -14,6 +14,7 @@ import scala.util.Try
 /*
  TODO: Remove assetIdOpt after Testnet relaunch
  */
+@SerialVersionUID(-28455548758206564L)
 case class IssueTransaction(sender: PublicKeyAccount,
                             assetIdOpt: Option[Array[Byte]],
                             name: Array[Byte],

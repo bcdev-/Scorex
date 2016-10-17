@@ -67,6 +67,26 @@ trait TransactionGen {
   val issueGenerator: Gen[IssueTransaction] = issueReissueGenerator.map(_._1)
   val reissueGenerator: Gen[ReissueTransaction] = issueReissueGenerator.map(_._2)
 
+  val messageGenerator: Gen[MessageTransaction] = for {
+    sender: PrivateKeyAccount <- accountGen
+    message <- genBoundedBytes(1, MessageTransaction.MaxMessageSize)
+    recipient: PrivateKeyAccount <- accountGen
+    fee <- positiveLongGen
+    timestamp <- positiveLongGen
+  } yield {
+    MessageTransaction.create(timestamp, sender, recipient, fee, message)
+  }
+
+  val invalidMessageGenerator: Gen[MessageTransaction] = for {
+    sender: PrivateKeyAccount <- accountGen
+    message <- genBoundedBytes(MessageTransaction.MaxMessageSize * 2, 1024)
+    recipient: PrivateKeyAccount <- accountGen
+    fee <- positiveLongGen
+    timestamp <- positiveLongGen
+  } yield {
+    MessageTransaction.create(timestamp, sender, recipient, fee, message)
+  }
+
   val invalidOrderGenerator: Gen[Order] = for {
     sender: PrivateKeyAccount <- accountGen
     matcher: PrivateKeyAccount <- accountGen

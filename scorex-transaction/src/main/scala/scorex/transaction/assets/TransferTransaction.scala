@@ -12,6 +12,7 @@ import scorex.transaction._
 
 import scala.util.Try
 
+@SerialVersionUID(7819822579806392886L)
 case class TransferTransaction(assetId: Option[AssetId],
                                sender: PublicKeyAccount,
                                recipient: Account,

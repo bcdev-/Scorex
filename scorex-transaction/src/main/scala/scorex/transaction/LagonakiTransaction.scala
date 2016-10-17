@@ -9,7 +9,7 @@ import scorex.transaction.TypedTransaction.TransactionType
 
 import scala.concurrent.duration._
 
-
+@SerialVersionUID(6117785013396482802L)
 abstract class LagonakiTransaction(val transactionType: TransactionType.Value,
                                    val recipient: Account,
                                    val amount: Long,
