@@ -11,9 +11,10 @@ import scorex.network.{Broadcast, NetworkController, TransactionalMessagesRepo}
 import scorex.settings.Settings
 import scorex.transaction.SimpleTransactionModule.StoredInBlock
 import scorex.transaction.ValidationResult.ValidationResult
-import scorex.transaction.assets.{IssueTransaction, ReissueTransaction, TransferTransaction}
+import scorex.transaction.assets.{ReissueTransaction, IssueTransaction, TransferTransaction}
 import scorex.transaction.state.database.{BlockStorageImpl, UnconfirmedTransactionsDatabaseImpl}
-import scorex.transaction.state.wallet.{IssueRequest, Payment, ReissueRequest, TransferRequest}
+import scorex.transaction.state.wallet.{ReissueRequest, IssueRequest, Payment, TransferRequest, MessageTx}
+import scorex.transaction.state.wallet.EncryptedMessageTx
 import scorex.utils._
 import scorex.wallet.Wallet
 
@@ -141,6 +142,27 @@ class SimpleTransactionModule(implicit val settings: TransactionSettings with Se
     wallet.privateKeyAccount(payment.sender).map { sender =>
       createPayment(sender, new Account(payment.recipient), payment.amount, payment.fee)
     }
+  }
+
+  def sendMessage(request: MessageTx, wallet: Wallet): Try[MessageTransaction] = Try {
+    val sender = wallet.privateKeyAccount(request.sender).get
+
+    val message = MessageTransaction.create(getTimestamp, sender, new Account(request.recipient), request.fee,
+      Base58.decode(request.message).get)
+    if (isValid(message)) onNewOffchainTransaction(message)
+    else throw new StateCheckFailed("Invalid message transaction generated: " + message.json)
+    message
+  }
+
+  def sendEncryptedMessage(request: EncryptedMessageTx, wallet: Wallet): Try[EncryptedMessageTransaction] = Try {
+    val sender = wallet.privateKeyAccount(request.sender).get
+
+    val recipientPublicKey = Base58.decode(request.recipientPublicKey).get
+    val message = EncryptedMessageTransaction.createAndEncrypt(getTimestamp, sender, new PublicKeyAccount(recipientPublicKey), request.fee,
+      Base58.decode(request.message).get)
+    if (isValid(message)) onNewOffchainTransaction(message)
+    else throw new StateCheckFailed("Invalid message transaction generated: " + message.json)
+    message
   }
 
   def transferAsset(request: TransferRequest, wallet: Wallet): Try[TransferTransaction] = Try {
