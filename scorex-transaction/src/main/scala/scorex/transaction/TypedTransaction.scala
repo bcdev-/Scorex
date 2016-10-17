@@ -15,12 +15,14 @@ trait TypedTransaction extends Transaction {
 object TypedTransaction extends Deser[TypedTransaction] {
 
   //TYPES
+  @SerialVersionUID(-5089886728560175625L)
   object TransactionType extends Enumeration {
     val GenesisTransaction = Value(1)
     val PaymentTransaction = Value(2)
     val IssueTransaction = Value(3)
     val TransferTransaction = Value(4)
     val ReissueTransaction = Value(5)
+    val MessageTransaction = Value(6)
   }
 
   def parseBytes(data: Array[Byte]): Try[TypedTransaction] =
@@ -39,6 +41,9 @@ object TypedTransaction extends Deser[TypedTransaction] {
 
       case txType: Byte if txType == TransactionType.ReissueTransaction.id =>
         ReissueTransaction.parseTail(data.tail)
+
+      case txType: Byte if txType == TransactionType.MessageTransaction.id =>
+        MessageTransaction.parseTail(data.tail)
 
       case txType => Failure(new Exception(s"Invalid transaction type: $txType"))
     }

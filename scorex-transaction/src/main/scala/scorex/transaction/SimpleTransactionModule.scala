@@ -11,8 +11,9 @@ import scorex.network.{Broadcast, NetworkController, TransactionalMessagesRepo}
 import scorex.settings.Settings
 import scorex.transaction.SimpleTransactionModule.StoredInBlock
 import scorex.transaction.assets.{ReissueTransaction, IssueTransaction, TransferTransaction}
+import scorex.transaction.MessageTransaction
 import scorex.transaction.state.database.{BlockStorageImpl, UnconfirmedTransactionsDatabaseImpl}
-import scorex.transaction.state.wallet.{ReissueRequest, IssueRequest, Payment, TransferRequest}
+import scorex.transaction.state.wallet.{ReissueRequest, IssueRequest, Payment, TransferRequest, MessageTx}
 import scorex.utils._
 import scorex.wallet.Wallet
 import scala.concurrent.duration._
@@ -137,6 +138,17 @@ class SimpleTransactionModule(implicit val settings: TransactionSettings with Se
       createPayment(sender, new Account(payment.recipient), payment.amount, payment.fee)
     }
   }
+
+  def sendMessage(request: MessageTx, wallet: Wallet): Option[MessageTransaction] = Try {
+    val sender = wallet.privateKeyAccount(request.sender).get
+
+    val message = MessageTransaction.create(getTimestamp, sender, new Account(request.recipient), request.fee,
+      request.message.getBytes("utf-8"))
+
+    if (isValid(message)) onNewOffchainTransaction(message)
+    else log.warn("Invalid message transaction generated: " + message.json)
+    message
+  }.toOption
 
   def transferAsset(request: TransferRequest, wallet: Wallet): Try[TransferTransaction] = Try {
     val sender = wallet.privateKeyAccount(request.sender).get
