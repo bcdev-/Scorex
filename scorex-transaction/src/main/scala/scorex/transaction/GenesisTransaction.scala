@@ -10,7 +10,7 @@ import scorex.transaction.TypedTransaction.TransactionType
 
 import scala.util.{Failure, Try}
 
-
+@SerialVersionUID(4259636843622212366L)
 case class GenesisTransaction(override val recipient: Account,
                               override val amount: Long,
                               override val timestamp: Long)

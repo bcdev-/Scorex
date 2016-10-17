@@ -27,7 +27,7 @@ case class TransactionsApiRoute(application: Application)(implicit val context: 
 
   override lazy val route =
     pathPrefix("transactions") {
-      unconfirmed ~ addressLimit ~ info
+      unconfirmed ~ addressLimit ~ info ~ decrypt
     }
 
   //TODO implement general pagination
@@ -73,6 +73,37 @@ case class TransactionsApiRoute(application: Application)(implicit val context: 
             }
           case _ => JsonResponse(Json.obj("status" -> "error", "details" -> "Incorrect signature"),
             StatusCodes.UnprocessableEntity)
+        }
+      }
+    }
+  }
+
+  @Path("/decrypt/{signature}")
+  @ApiOperation(value = "Decrypt", notes = "Get decrypted transaction info", httpMethod = "GET")
+  @ApiImplicitParams(Array(
+    new ApiImplicitParam(name = "signature", value = "transaction signature ", required = true, dataType = "string", paramType = "path")
+  ))
+  def decrypt: Route = {
+    path("decrypt" / Segment) { case encoded =>
+      withAuth {
+        getJsonRoute {
+          Base58.decode(encoded) match {
+            case Success(sig) =>
+              state.included(sig, None) match {
+                case Some(h) =>
+                  Try {
+                    val block = application.blockStorage.history.asInstanceOf[StoredBlockchain].blockAt(h).get
+                    val tx = block.transactions.filter(_.id sameElements sig).head
+                    val json = tx.jsonWithWallet(application.wallet) + ("height" -> Json.toJson(h))
+                    JsonResponse(json, StatusCodes.OK)
+                  }.getOrElse(JsonResponse(Json.obj("status" -> "error", "details" -> "Internal error"),
+                    StatusCodes.InternalServerError))
+                case None => JsonResponse(Json.obj("status" -> "error", "details" -> "Transaction is not in blockchain"),
+                  StatusCodes.NotFound)
+              }
+            case _ => JsonResponse(Json.obj("status" -> "error", "details" -> "Incorrect signature"),
+              StatusCodes.UnprocessableEntity)
+          }
         }
       }
     }
