@@ -294,6 +294,10 @@ class StoredState(db: MVStore) extends LagonakiState with ScorexLogging {
         sameSender && reissuable
       }
       reissueValid && tx.validate == ValidationResult.ValidateOke && included(tx.id, None).isEmpty
+    case tx: MessageTransaction =>
+      tx.validate == ValidationResult.ValidateOke && included(tx.id, None).isEmpty
+    case tx: EncryptedMessageTransaction =>
+      tx.validate == ValidationResult.ValidateOke && included(tx.id, None).isEmpty
     case gtx: GenesisTransaction =>
       height == 0
     case otx: Any =>

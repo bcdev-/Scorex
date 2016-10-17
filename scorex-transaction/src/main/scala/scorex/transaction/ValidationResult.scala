@@ -13,4 +13,9 @@ object ValidationResult extends Enumeration {
   val InvalidName = Value(8)
   val StateCheckFailed = Value(9)
   val OverflowError = Value(10)
+  val MessageEmpty = Value(11)
+  val MessageTooLong = Value(12)
+  val MessageHashInvalid = Value(13)
+  val MessageNotAligned = Value(14)
+  val NonceLengthIncorrect = Value(15)
 }
