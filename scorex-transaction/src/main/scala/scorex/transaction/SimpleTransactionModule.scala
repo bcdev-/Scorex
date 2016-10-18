@@ -14,6 +14,7 @@ import scorex.transaction.assets.{ReissueTransaction, IssueTransaction, Transfer
 import scorex.transaction.MessageTransaction
 import scorex.transaction.state.database.{BlockStorageImpl, UnconfirmedTransactionsDatabaseImpl}
 import scorex.transaction.state.wallet.{ReissueRequest, IssueRequest, Payment, TransferRequest, MessageTx}
+import scorex.transaction.state.wallet.EncryptedMessageTx
 import scorex.utils._
 import scorex.wallet.Wallet
 import scala.concurrent.duration._
@@ -144,7 +145,17 @@ class SimpleTransactionModule(implicit val settings: TransactionSettings with Se
 
     val message = MessageTransaction.create(getTimestamp, sender, new Account(request.recipient), request.fee,
       request.message.getBytes("utf-8"))
+    if (isValid(message)) onNewOffchainTransaction(message)
+    else log.warn("Invalid message transaction generated: " + message.json)
+    message
+  }.toOption
 
+  def sendEncryptedMessage(request: EncryptedMessageTx, wallet: Wallet): Option[EncryptedMessageTransaction] = Try {
+    val sender = wallet.privateKeyAccount(request.sender).get
+
+    val recipientPublicKey = Base58.decode(request.recipientPublicKey).get
+    val message = EncryptedMessageTransaction.createAndEncrypt(getTimestamp, sender, new PublicKeyAccount(recipientPublicKey), request.fee,
+      request.message.getBytes("utf-8"))
     if (isValid(message)) onNewOffchainTransaction(message)
     else log.warn("Invalid message transaction generated: " + message.json)
     message

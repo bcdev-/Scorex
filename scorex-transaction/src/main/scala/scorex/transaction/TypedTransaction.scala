@@ -23,6 +23,7 @@ object TypedTransaction extends Deser[TypedTransaction] {
     val TransferTransaction = Value(4)
     val ReissueTransaction = Value(5)
     val MessageTransaction = Value(6)
+    val EncryptedMessageTransaction = Value(7)
   }
 
   def parseBytes(data: Array[Byte]): Try[TypedTransaction] =
@@ -44,6 +45,9 @@ object TypedTransaction extends Deser[TypedTransaction] {
 
       case txType: Byte if txType == TransactionType.MessageTransaction.id =>
         MessageTransaction.parseTail(data.tail)
+
+      case txType: Byte if txType == TransactionType.EncryptedMessageTransaction.id =>
+        EncryptedMessageTransaction.parseTail(data.tail)
 
       case txType => Failure(new Exception(s"Invalid transaction type: $txType"))
     }
