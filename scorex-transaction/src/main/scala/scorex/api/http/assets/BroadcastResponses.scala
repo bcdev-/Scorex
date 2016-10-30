@@ -40,8 +40,8 @@ object BroadcastResponses {
       Base58.encode(tx.id),
       Base58.encode(tx.assetId),
       Base58.encode(tx.sender.publicKey),
-      Base58.encode(tx.name),
-      Base58.encode(tx.description),
+      new String(tx.name),
+      new String(tx.description),
       tx.quantity, tx.decimals, tx.reissuable, tx.fee, tx.timestamp,
       Base58.encode(tx.signature)
     )

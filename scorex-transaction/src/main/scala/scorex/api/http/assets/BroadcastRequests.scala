@@ -14,9 +14,9 @@ object BroadcastRequests {
   @ApiModel(value = "Signed Asset issue transaction")
   case class AssetIssueRequest(@ApiModelProperty(value = "Base58 encoded Issuer public key", required = true)
                                senderPublicKey: String,
-                               @ApiModelProperty(value = "Base58 encoded name of Asset", required = true)
+                               @ApiModelProperty(value = "Name of Asset", required = true)
                                name: String,
-                               @ApiModelProperty(value = "Base58 encoded description of Asset", required = true)
+                               @ApiModelProperty(value = "Description of Asset", required = true)
                                description: String,
                                @ApiModelProperty(required = true, example = "1000000")
                                quantity: Long,
@@ -35,8 +35,8 @@ object BroadcastRequests {
       IssueTransaction(
         new PublicKeyAccount(Base58.decode(senderPublicKey).get),
         None,
-        Base58.decode(name).get,
-        Base58.decode(description).get,
+        name.getBytes("utf-8"),
+        description.getBytes("utf-8"),
         quantity,
         decimals,
         reissuable,
