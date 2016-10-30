@@ -26,7 +26,7 @@ case class WalletApiRoute(application: Application)(implicit val context: ActorR
     path("wallet" / "seed") {
       withAuth {
         getJsonRoute {
-          lazy val response = JsonResponse(Json.obj("seed" -> Base58.encode(wallet.seed)), StatusCodes.OK)
+          lazy val response = JsonResponse(Json.obj("seed" -> new String(wallet.seed)), StatusCodes.OK)
           walletNotExists(wallet).getOrElse(response)
         }
       }

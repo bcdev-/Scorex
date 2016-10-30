@@ -131,7 +131,7 @@ trait Settings extends ScorexLogging {
     println("Please type your wallet password")
     scala.io.StdIn.readLine()
   }
-  lazy val walletSeed = (settingsJSON \ "walletSeed").asOpt[String].flatMap(s => Base58.decode(s).toOption)
+  lazy val walletSeed = (settingsJSON \ "walletSeed").asOpt[String].flatMap(s => Some(s.getBytes("utf-8")))
 
   lazy val apiKeyHash = (settingsJSON \ "apiKeyHash").asOpt[String].flatMap(s => Base58.decode(s).toOption)
 

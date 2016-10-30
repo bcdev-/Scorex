@@ -41,12 +41,7 @@ class Wallet(walletFileOpt: Option[File], password: String, seedOpt: Option[Arra
           println(s"You random generated seed is $encodedSeed")
           randomSeed
         } else
-          Base58.decode(typed).getOrElse {
-            if (limit > 0) {
-              println("Wallet seed should be correct Base58 encoded string.")
-              readSeed(limit - 1)
-            } else throw new Error("Sorry you have made too many incorrect seed guesses")
-          }
+          typed.getBytes("utf-8")
       }
       readSeed()
     }

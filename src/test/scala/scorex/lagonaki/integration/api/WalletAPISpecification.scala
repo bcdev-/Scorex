@@ -1,7 +1,6 @@
 package scorex.lagonaki.integration.api
 
 import org.scalatest.{FunSuite, Matchers}
-import scorex.crypto.encode.Base58
 import scorex.lagonaki.integration.TestLock
 
 class WalletAPISpecification extends FunSuite with TestLock with Matchers {
@@ -16,6 +15,6 @@ class WalletAPISpecification extends FunSuite with TestLock with Matchers {
     GET.incorrectApiKeyTest("/wallet/seed")
 
     val response = GET.request("/wallet/seed", headers =  Map("api_key" -> "test"))
-    (response \ "seed").as[String] shouldBe Base58.encode(application.settings.walletSeed.get)
+    (response \ "seed").as[String] shouldBe application.settings.walletSeed.get
   }
 }
