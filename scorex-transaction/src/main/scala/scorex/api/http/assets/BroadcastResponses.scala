@@ -134,7 +134,7 @@ object BroadcastResponses {
       tx.amount,
       tx.fee,
       tx.timestamp,
-      if (tx.attachment.length > 0) Some(Base58.encode(tx.attachment)) else None,
+      if (tx.attachment.length > 0) Some(new String(tx.attachment)) else None,
       Base58.encode(tx.signature)
     )
 

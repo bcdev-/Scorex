@@ -153,7 +153,7 @@ class SimpleTransactionModule(implicit val settings: TransactionSettings with Se
       getTimestamp,
       request.feeAsset.map(s => Base58.decode(s).get),
       request.feeAmount,
-      Base58.decode(request.attachment).get)
+      request.attachment.getBytes("utf-8"))
 
     if (isValid(transfer)) onNewOffchainTransaction(transfer)
     else throw new StateCheckFailed("Invalid transfer transaction generated: " + transfer.json)

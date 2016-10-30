@@ -120,7 +120,8 @@ case class AssetsBroadcastApiRoute(application: Application)(implicit val contex
                 broadcast(tx)(t => Json.toJson(AssetTransferResponse(t)))
               }.getOrElse(WrongJson.response)
 
-            case _: JsError => WrongJson.response
+            case err: JsError =>
+              WrongTransactionJson(err).response
           }
         }.getOrElse(WrongJson.response)
       }

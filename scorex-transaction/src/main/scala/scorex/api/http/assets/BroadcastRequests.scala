@@ -88,7 +88,7 @@ object BroadcastRequests {
                                   fee: Long,
                                   @ApiModelProperty(required = true)
                                   timestamp: Long,
-                                  @ApiModelProperty(value = "Base58 encoded attachment")
+                                  @ApiModelProperty(value = "Attachment")
                                   attachment: Option[String],
                                   @ApiModelProperty(required = true)
                                   signature: String) {
@@ -101,7 +101,7 @@ object BroadcastRequests {
         timestamp,
         None,
         fee,
-        attachment.map(Base58.decode(_).get).getOrElse(new Array[Byte](0)),
+        attachment.map(_.getBytes("utf-8")).getOrElse(new Array[Byte](0)),
         Base58.decode(signature).get)
     }
   }
