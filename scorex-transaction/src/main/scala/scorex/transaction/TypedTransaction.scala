@@ -15,6 +15,7 @@ trait TypedTransaction extends Transaction {
 object TypedTransaction extends Deser[TypedTransaction] {
 
   //TYPES
+  @SerialVersionUID(-5089886728560175625L)
   object TransactionType extends Enumeration {
     val GenesisTransaction = Value(1)
     val PaymentTransaction = Value(2)
