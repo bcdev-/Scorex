@@ -52,7 +52,7 @@ class StoredStateSpecification extends FunSuite with Matchers with TableDrivenPr
       i.incrementAndGet(),
       request.feeAsset.map(s => Base58.decode(s).get),
       request.feeAmount,
-      request.attachment.getBytes("utf-8"))
+      request.attachment.getBytes("ISO-8859-1"))
   }
 
   test("many transfer asset transactions") {

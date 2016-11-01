@@ -35,8 +35,8 @@ object BroadcastRequests {
       IssueTransaction(
         new PublicKeyAccount(Base58.decode(senderPublicKey).get),
         None,
-        name.getBytes("utf-8"),
-        description.getBytes("utf-8"),
+        name.getBytes("ISO-8859-1"),
+        description.getBytes("ISO-8859-1"),
         quantity,
         decimals,
         reissuable,
@@ -101,7 +101,7 @@ object BroadcastRequests {
         timestamp,
         None,
         fee,
-        attachment.map(_.getBytes("utf-8")).getOrElse(new Array[Byte](0)),
+        attachment.map(_.getBytes("ISO-8859-1")).getOrElse(new Array[Byte](0)),
         Base58.decode(signature).get)
     }
   }

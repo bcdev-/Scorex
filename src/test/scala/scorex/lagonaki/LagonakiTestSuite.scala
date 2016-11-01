@@ -15,6 +15,7 @@ class LagonakiTestSuite extends Sequential(
   , new PeersAPISpecification
   , new WalletAPISpecification
   , new AddressesAPISpecification
+  , new AssetsAPISpecification
   , new TransactionsAPISpecification
   , new PaymentAPISpecification
 

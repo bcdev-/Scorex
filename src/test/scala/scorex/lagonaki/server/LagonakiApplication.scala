@@ -42,7 +42,8 @@ class LagonakiApplication(val settingsFilename: String) extends RunnableApplicat
     PaymentApiRoute(this),
     UtilsApiRoute(this),
     PeersApiRoute(this),
-    AddressApiRoute(this)
+    AddressApiRoute(this),
+    AssetsApiRoute(this)
   )
 
   override lazy val apiTypes = Seq(

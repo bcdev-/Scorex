@@ -143,6 +143,7 @@ object TestingCommons {
                 peer: String = peerUrl(application)): JsValue = {
       val request = Http(url(peer + us).POST << params <:< headers << body)
       val response = Await.result(request, 5.seconds)
+      println(response.getResponseBody)
       Json.parse(response.getResponseBody)
     }
 

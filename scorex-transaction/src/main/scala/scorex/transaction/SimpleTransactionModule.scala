@@ -146,6 +146,11 @@ class SimpleTransactionModule(implicit val settings: TransactionSettings with Se
   def transferAsset(request: TransferRequest, wallet: Wallet): Try[TransferTransaction] = Try {
     val sender = wallet.privateKeyAccount(request.sender).get
 
+    println(request.attachment)
+    println(request.attachment.length)
+    println(request.attachment.getBytes("ISO-8859-1").mkString(" "))
+    println(request.attachment.getBytes("ISO-8859-1").length)
+
     val transfer: TransferTransaction = TransferTransaction.create(request.assetIdOpt.map(s => Base58.decode(s).get),
       sender: PrivateKeyAccount,
       new Account(request.recipient),
@@ -153,7 +158,7 @@ class SimpleTransactionModule(implicit val settings: TransactionSettings with Se
       getTimestamp,
       request.feeAsset.map(s => Base58.decode(s).get),
       request.feeAmount,
-      request.attachment.getBytes("utf-8"))
+      request.attachment.getBytes("ISO-8859-1"))
 
     if (isValid(transfer)) onNewOffchainTransaction(transfer)
     else throw new StateCheckFailed("Invalid transfer transaction generated: " + transfer.json)
@@ -164,8 +169,8 @@ class SimpleTransactionModule(implicit val settings: TransactionSettings with Se
     val sender = wallet.privateKeyAccount(request.sender).get
     val issue = IssueTransaction.create(sender,
       None,
-      request.name.getBytes("utf-8"),
-      request.description.getBytes("utf-8"),
+      request.name.getBytes("ISO-8859-1"),
+      request.description.getBytes("ISO-8859-1"),
       request.quantity,
       request.decimals,
       request.reissuable,

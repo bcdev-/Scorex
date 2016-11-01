@@ -62,20 +62,24 @@ case class TransferTransaction(assetId: Option[AssetId],
   } else ValidationResult.ValidateOke
 
 
-  override lazy val json: JsObject = Json.obj(
-    "type" -> transactionType.id,
-    "id" -> Base58.encode(id),
-    "sender" -> sender.address,
-    "senderPublicKey" -> Base58.encode(sender.publicKey),
-    "recipient" -> recipient.address,
-    "assetId" -> assetId.map(Base58.encode),
-    "amount" -> amount,
-    "feeAsset" -> feeAsset.map(Base58.encode),
-    "fee" -> fee,
-    "timestamp" -> timestamp,
-    "attachment" -> new String(attachment),
-    "signature" -> Base58.encode(signature)
-  )
+  override lazy val json: JsObject = {
+    val j = Json.obj(
+      "type" -> transactionType.id,
+      "id" -> Base58.encode(id),
+      "sender" -> sender.address,
+      "senderPublicKey" -> Base58.encode(sender.publicKey),
+      "recipient" -> recipient.address,
+      "assetId" -> assetId.map(Base58.encode),
+      "amount" -> amount,
+      "feeAsset" -> feeAsset.map(Base58.encode),
+      "fee" -> fee,
+      "timestamp" -> timestamp,
+      "attachment" -> new String(attachment),
+      "signature" -> Base58.encode(signature)
+    )
+    println((j \ "attachment").as[String].length)
+    j
+  }
 
   override lazy val bytes: Array[Byte] = Bytes.concat(Array(transactionType.id.toByte), signature, toSign)
 
