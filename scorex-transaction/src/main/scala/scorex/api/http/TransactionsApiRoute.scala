@@ -40,7 +40,9 @@ case class TransactionsApiRoute(application: Application)(implicit val context: 
   def addressLimit: Route = {
     path("address" / Segment / "limit" / IntNumber) { case (address, limit) =>
       getJsonRoute {
-        if (limit <= MaxTransactionsPerRequest) {
+        if (address.length > Account.Base58MaxAddressLength) {
+          InvalidAddress.response
+        } else if (limit <= MaxTransactionsPerRequest) {
           val account = new Account(address)
           val txJsons = state.accountTransactions(account, limit).map(_.json)
           JsonResponse(Json.arr(txJsons), StatusCodes.OK)
@@ -57,22 +59,26 @@ case class TransactionsApiRoute(application: Application)(implicit val context: 
   def info: Route = {
     path("info" / Segment) { case encoded =>
       getJsonRoute {
-        Base58.decode(encoded) match {
-          case Success(sig) =>
-            state.included(sig, None) match {
-              case Some(h) =>
-                Try {
-                  val block = application.blockStorage.history.asInstanceOf[StoredBlockchain].blockAt(h).get
-                  val tx = block.transactions.filter(_.id sameElements sig).head
-                  val json = tx.json + ("height" -> Json.toJson(h))
-                  JsonResponse(json, StatusCodes.OK)
-                }.getOrElse(JsonResponse(Json.obj("status" -> "error", "details" -> "Internal error"),
-                  StatusCodes.InternalServerError))
-              case None => JsonResponse(Json.obj("status" -> "error", "details" -> "Transaction is not in blockchain"),
-                StatusCodes.NotFound)
-            }
-          case _ => JsonResponse(Json.obj("status" -> "error", "details" -> "Incorrect signature"),
-            StatusCodes.UnprocessableEntity)
+        if (encoded.length > Account.Base58MaxTransactionIdLength) {
+          InvalidSignature.response
+        } else {
+          Base58.decode(encoded) match {
+            case Success(sig) =>
+              state.included(sig, None) match {
+                case Some(h) =>
+                  Try {
+                    val block = application.blockStorage.history.asInstanceOf[StoredBlockchain].blockAt(h).get
+                    val tx = block.transactions.filter(_.id sameElements sig).head
+                    val json = tx.json + ("height" -> Json.toJson(h))
+                    JsonResponse(json, StatusCodes.OK)
+                  }.getOrElse(JsonResponse(Json.obj("status" -> "error", "details" -> "Internal error"),
+                    StatusCodes.InternalServerError))
+                case None => JsonResponse(Json.obj("status" -> "error", "details" -> "Transaction is not in blockchain"),
+                  StatusCodes.NotFound)
+              }
+            case _ => JsonResponse(Json.obj("status" -> "error", "details" -> "Incorrect signature"),
+              StatusCodes.UnprocessableEntity)
+          }
         }
       }
     }

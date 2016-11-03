@@ -31,6 +31,11 @@ object Account extends ScorexLogging {
   val HashLength = 20
   val AddressLength = 1 + 1 + ChecksumLength + HashLength
 
+  val Base58MaxAddressLength = 40
+  val Base58MaxTransactionIdLength = 46
+  val Base58MaxSignatureLength = 90
+  val Base58MaxSenderPublicKeyLength = 46
+
   private def scheme = AddressScheme.current
 
   /**
@@ -48,28 +53,33 @@ object Account extends ScorexLogging {
 
   def isValid(account: Account): Boolean = isValidAddress(account.address)
 
-  def isValidAddress(address: String): Boolean =
-    Base58.decode(address).map { addressBytes =>
-      val version = addressBytes.head
-      val network = addressBytes.tail.head
-      if (version != AddressVersion) {
-        log.warn(s"Unknown address version: $version")
-        false
-      } else if (network != scheme.chainId) {
-        log.warn(s"Unknown network: $network")
-        false
-      } else {
-        if (addressBytes.length != Account.AddressLength)
+  def isValidAddress(address: String): Boolean = {
+    if (address.length > Base58MaxAddressLength) {
+      false
+    } else {
+      Base58.decode(address).map { addressBytes =>
+        val version = addressBytes.head
+        val network = addressBytes.tail.head
+        if (version != AddressVersion) {
+          log.warn(s"Unknown address version: $version")
           false
-        else {
-          val checkSum = addressBytes.takeRight(ChecksumLength)
+        } else if (network != scheme.chainId) {
+          log.warn(s"Unknown network: $network")
+          false
+        } else {
+          if (addressBytes.length != Account.AddressLength)
+            false
+          else {
+            val checkSum = addressBytes.takeRight(ChecksumLength)
 
-          val checkSumGenerated = calcCheckSum(addressBytes.dropRight(ChecksumLength))
+            val checkSumGenerated = calcCheckSum(addressBytes.dropRight(ChecksumLength))
 
-          checkSum.sameElements(checkSumGenerated)
+            checkSum.sameElements(checkSumGenerated)
+          }
         }
       }
     }.getOrElse(false)
+  }
 
   private def calcCheckSum(withoutChecksum: Array[Byte]): Array[Byte] = hash(withoutChecksum).take(ChecksumLength)
 

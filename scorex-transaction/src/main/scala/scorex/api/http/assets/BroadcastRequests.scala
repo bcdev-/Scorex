@@ -33,6 +33,8 @@ object BroadcastRequests {
                                signature: String) {
 
     def toTx: Try[IssueTransaction] = Try {
+      require(signature.length <= Account.Base58MaxSignatureLength, "signature is invalid")
+      require(senderPublicKey.length <= Account.Base58MaxSenderPublicKeyLength, "sender public key is invalid")
       IssueTransaction(
         new PublicKeyAccount(Base58.decode(senderPublicKey).get),
         name.getBytes(Charsets.UTF_8),
@@ -64,6 +66,9 @@ object BroadcastRequests {
                                  signature: String) {
 
     def toTx: Try[ReissueTransaction] = Try {
+      require(signature.length <= Account.Base58MaxSignatureLength, "signature is invalid")
+      require(senderPublicKey.length <= Account.Base58MaxSenderPublicKeyLength, "sender public key is invalid")
+      require(assetId.length <= Account.Base58MaxTransactionIdLength, "asset ID is invalid")
       ReissueTransaction(
         new PublicKeyAccount(Base58.decode(senderPublicKey).get),
         Base58.decode(assetId).get,
@@ -95,6 +100,12 @@ object BroadcastRequests {
                                   @ApiModelProperty(required = true)
                                   signature: String) {
     def toTx: Try[TransferTransaction] = Try {
+      require(signature.length <= Account.Base58MaxSignatureLength, "signature is invalid")
+      require(senderPublicKey.length <= Account.Base58MaxSenderPublicKeyLength, "sender public key is invalid")
+      if(assetId.isDefined)
+        require(assetId.get.length <= Account.Base58MaxTransactionIdLength, "asset ID is invalid")
+      if(attachment.isDefined)
+        require(attachment.get.length <= TransferTransaction.MaxAttachmentSize * 2, "attachment is too long")
       TransferTransaction(
         assetId.map(Base58.decode(_).get),
         new PublicKeyAccount(Base58.decode(senderPublicKey).get),

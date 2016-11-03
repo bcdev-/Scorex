@@ -147,7 +147,6 @@ case class AddressApiRoute(application: Application)(implicit val context: Actor
   ))
   def confirmationBalance: Route = {
     path("balance" / Segment / IntNumber) { case (address, confirmations) =>
-      //todo: confirmations parameter doesn't work atm
       getJsonRoute {
         balanceJson(address, confirmations)
       }
