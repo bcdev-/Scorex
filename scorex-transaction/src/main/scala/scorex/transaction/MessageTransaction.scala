@@ -65,7 +65,7 @@ case class MessageTransaction(timestamp: Long,
       ValidationResult.MessageTooLong
     } else if (message.length == 0) {
       ValidationResult.MessageEmpty
-    } else if (!signatureValid) {
+    } else if (!signatureWithIdValid) {
       ValidationResult.InvalidSignature
     } else if (messageHashValid) {
       ValidationResult.MessageHashInvalid
@@ -105,7 +105,7 @@ object MessageTransaction extends Deser[MessageTransaction] {
     lazy val messageHash = Blake2b256.hash(message).slice(0, 20)
 
     val unsigned = MessageTransaction(timestamp, sender, recipient, feeAmount, message, messageHash, null)
-    val sig = EllipticCurveImpl.sign(sender, unsigned.toSign)
+    val sig = EllipticCurveImpl.sign(sender, Array(unsigned.transactionType.id.toByte) ++ unsigned.toSign)
     unsigned.copy(signature = sig)
   }
 }

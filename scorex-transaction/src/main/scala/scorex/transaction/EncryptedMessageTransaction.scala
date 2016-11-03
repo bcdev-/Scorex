@@ -116,7 +116,7 @@ case class EncryptedMessageTransaction(timestamp: Long,
       ValidationResult.NonceLengthIncorrect
     } else if (!messageHashValid) {
       ValidationResult.MessageHashInvalid
-    } else if (!signatureValid) {
+    } else if (!signatureWithIdValid) {
       ValidationResult.InvalidSignature
     } else ValidationResult.ValidateOke
   }
@@ -160,7 +160,7 @@ object EncryptedMessageTransaction extends Deser[EncryptedMessageTransaction] {
     lazy val rawMessageHash = Blake2b256.hash(Bytes.concat(nonce, rawMessage)).slice(0, 20)
 
     val unsigned = EncryptedMessageTransaction(timestamp, sender, recipient, feeAmount, rawMessage, rawMessageHash, nonce, null)
-    val sig = EllipticCurveImpl.sign(sender, unsigned.toSign)
+    val sig = EllipticCurveImpl.sign(sender, Array(unsigned.transactionType.id.toByte) ++ unsigned.toSign)
     unsigned.copy(signature = sig)
   }
 
@@ -208,7 +208,7 @@ object EncryptedMessageTransaction extends Deser[EncryptedMessageTransaction] {
     val (rawMessage, rawMessageHash, nonce) = encryptMessage(timestamp, sender, recipient, message)
 
     val unsigned = EncryptedMessageTransaction(timestamp, sender, recipient, feeAmount, rawMessage, rawMessageHash, nonce, null)
-    val sig = EllipticCurveImpl.sign(sender, unsigned.toSign)
+    val sig = EllipticCurveImpl.sign(sender, Array(unsigned.transactionType.id.toByte) ++ unsigned.toSign)
     unsigned.copy(signature = sig)
   }
 }
